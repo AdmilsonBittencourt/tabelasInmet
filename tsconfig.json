@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "es2016", // Versão do JavaScript que será gerada
+    "module": "commonjs", // Sistema de módulos a ser usado
+    "rootDir": "./src", // Onde está nosso código TypeScript
+    "outDir": "./dist", // Para onde o código JavaScript compilado irá
+    "esModuleInterop": true, // Permite compatibilidade entre diferentes tipos de módulos
+    "forceConsistentCasingInFileNames": true, // Garante que os nomes de arquivos sejam consistentes
+    "strict": true, // Habilita todas as checagens de tipo estritas
+    "skipLibCheck": true // Pula a verificação de tipos de arquivos de declaração (.d.ts)
+  }
+}
