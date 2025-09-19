@@ -91,7 +91,8 @@ export class ApiINMET {
                 const rajadaMaior = parseFloat(maiorAteAgora.VEN_RAJ);
                 const rajadaAtual = parseFloat(dadoAtual.VEN_RAJ);
                 return rajadaAtual > rajadaMaior ? dadoAtual : maiorAteAgora;
-            }
+            },
+             { VEN_RAJ: "-9999", VEN_DIR: null } 
         );
 
         // Agora você consegue acessar o VEN_DIR diretamente:
@@ -154,6 +155,14 @@ export class ApiINMET {
             (hourlyRecord: any) => hourlyRecord.DT_MEDICAO === currentDate
         );
 
+         // <<< ADICIONE ESTAS LINHAS PARA DEPURAÇÃO >>>
+    // Vamos verificar os dados de um dia específico, por exemplo, o primeiro dia de Janeiro
+    if (currentDate === '2024-01-01') {
+        console.log(`--- Depurando o dia ${currentDate} ---`);
+        console.log('Dados horários encontrados para este dia:', JSON.stringify(hourlyDataForThisDay, null, 2));
+    }
+    // <<< FIM DA SEÇÃO DE DEPURAÇÃO >>>
+
         // Se não houver dados horários para este dia, definimos valores padrão
         if (hourlyDataForThisDay.length === 0) {
             return {
@@ -179,6 +188,13 @@ export class ApiINMET {
                 const umidadeAtual = parseFloat(dadoAtual.UMD_MAX);
                 return umidadeAtual > max ? umidadeAtual : max;
             }, Number.NEGATIVE_INFINITY);
+
+// <<< ADICIONE MAIS UM LOG AQUI >>>
+    if (currentDate === '2024-01-01') {
+        console.log('Valor calculado para maiorUmidade:', maiorUmidade);
+    }
+    // <<< FIM DA SEÇÃO DE DEPURAÇÃO >>>
+
 
         const radiacaoSolar =
             hourlyDataForThisDay
@@ -224,6 +240,203 @@ export class ApiINMET {
     return dadosProcessados;
 }
 
+/**
+ * Analisa uma lista de dados diários processados e calcula um resumo estatístico para o mês.
+ * @param dadosDiariosProcessados - Array de objetos, onde cada objeto contém os dados de um dia.
+ * @returns Um objeto com as estatísticas consolidadas do mês.
+ */
+async calcularResumoMensal(dadosDiariosProcessados: any[]) {
+    // Se não houver dados, retorna null para evitar erros.
+    if (!dadosDiariosProcessados || dadosDiariosProcessados.length === 0) {
+        return null;
+    }
+
+    // Helper para converter strings para números de forma segura, tratando null e valores inválidos.
+    const safeParseFloat = (value: string | null) => {
+        if (value === null || value === undefined) return 0;
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? 0 : parsed;
+    };
+
+    // Usamos .reduce para iterar sobre todos os dias e acumular os resultados em um único objeto.
+    const resumoInicial = {
+        tempMaxAbsoluta: Number.NEGATIVE_INFINITY,
+        tempMinAbsoluta: Number.POSITIVE_INFINITY,
+        umidadeMaxAbsoluta: Number.NEGATIVE_INFINITY,
+        umidadeMinAbsoluta: Number.POSITIVE_INFINITY,
+        maiorRajadaObj: { rajadaDeVento: Number.NEGATIVE_INFINITY, direcaoRajada: null },
+        
+        // Acumuladores para calcular médias
+        somaTempMax: 0,
+        somaTempMed: 0,
+        somaUmidadeMed: 0,
+        somaPrecipitacao: 0,
+        somaRadiacaoSolar: 0,
+        somaVelVento: 0,
+        
+        // Contadores de dias com dados válidos para médias precisas
+        countTempMax: 0,
+        countTempMed: 0,
+        countUmidadeMed: 0,
+        countVelVento: 0,
+    };
+
+    const estatisticasFinais = dadosDiariosProcessados.reduce((acc, dia) => {
+        // Converte os valores do dia para números
+        const tempMaxDia = safeParseFloat(dia.TEMP_MAX);
+        const tempMinDia = safeParseFloat(dia.TEMP_MIN);
+        const tempMedDia = safeParseFloat(dia.TEMP_MED);
+        const umidadeMaxDia = safeParseFloat(dia.maiorUmidade);
+        const umidadeMinDia = safeParseFloat(dia.UMD_MIN);
+        const umidadeMedDia = safeParseFloat(dia.UMD_MED);
+        const velVentoDia = safeParseFloat(dia.VEN_VEL);
+        const rajadaDia = safeParseFloat(dia.rajadaDeVento);
+        const precipitacaoDia = safeParseFloat(dia.CHUVA);
+        const radiacaoDia = safeParseFloat(dia.radiacaoSolar);
+        
+        // 1. Encontrar os valores MÁXIMOS e MÍNIMOS absolutos
+        if (tempMaxDia > acc.tempMaxAbsoluta) acc.tempMaxAbsoluta = tempMaxDia;
+        if (tempMinDia < acc.tempMinAbsoluta) acc.tempMinAbsoluta = tempMinDia;
+        if (umidadeMaxDia > acc.umidadeMaxAbsoluta) acc.umidadeMaxAbsoluta = umidadeMaxDia;
+        if (umidadeMinDia < acc.umidadeMinAbsoluta) acc.umidadeMinAbsoluta = umidadeMinDia;
+
+        // 2. Encontrar a maior rajada de vento e guardar o seu objeto (para pegar a direção)
+        if (rajadaDia > acc.maiorRajadaObj.rajadaDeVento) {
+            acc.maiorRajadaObj = { rajadaDeVento: rajadaDia, direcaoRajada: dia.direcaoRajada };
+        }
+
+        // 3. SOMAR os valores para depois calcular as médias
+        if (dia.TEMP_MAX != null) { acc.somaTempMax += tempMaxDia; acc.countTempMax++; }
+        if (dia.TEMP_MED != null) { acc.somaTempMed += tempMedDia; acc.countTempMed++; }
+        if (dia.UMD_MED != null) { acc.somaUmidadeMed += umidadeMedDia; acc.countUmidadeMed++; }
+        if (dia.VEN_VEL != null) { acc.somaVelVento += velVentoDia; acc.countVelVento++; }
+        
+        acc.somaPrecipitacao += precipitacaoDia;
+        acc.somaRadiacaoSolar += radiacaoDia;
+        
+        return acc;
+    }, resumoInicial);
+
+    // 4. Montar o objeto final com os cálculos de média
+    return {
+        temperaturaMaximaMes: estatisticasFinais.tempMaxAbsoluta,
+        mediaTemperaturasMaximas: estatisticasFinais.somaTempMax / (estatisticasFinais.countTempMax || 1),
+        temperaturaMinimaMes: estatisticasFinais.tempMinAbsoluta,
+        temperaturaMediaMes: estatisticasFinais.somaTempMed / (estatisticasFinais.countTempMed || 1),
+        umidadeMaximaMes: estatisticasFinais.umidadeMaxAbsoluta,
+        umidadeMinimaMes: estatisticasFinais.umidadeMinAbsoluta,
+        umidadeMediaMes: estatisticasFinais.somaUmidadeMed / (estatisticasFinais.countUmidadeMed || 1),
+        precipitacaoTotalMes: estatisticasFinais.somaPrecipitacao,
+        radiacaoSolarTotalMes: estatisticasFinais.somaRadiacaoSolar,
+        ventoMediaMes: estatisticasFinais.somaVelVento / (estatisticasFinais.countVelVento || 1),
+        maiorRajadaVentoMes: estatisticasFinais.maiorRajadaObj.rajadaDeVento,
+        direcaoMaiorRajada: estatisticasFinais.maiorRajadaObj.direcaoRajada,
+    };
+}
+
+// NOTA: Coloque esta função dentro da sua classe de serviço ou onde as outras funções estão.
+// Lembre-se que 'datahorario' é a instância da sua classe de serviço.
+
+
+/**
+ * Orquestra a busca de dados para cada mês de um ano específico e retorna uma lista de resumos mensais.
+ * @param year - O ano para o qual os dados serão buscados.
+ * @returns Uma Promise que resolve com um array de objetos, cada um sendo o resumo de um mês.
+ */
+async buscarResumosMensaisDoAno(year: number) {
+    const resumosMensais = [];
+
+    for (let month = 1; month <= 12; month++) {
+        // ... (código para obter dateInicial e dateFinal) ...
+        const dateInicial = `${year}-${String(month).padStart(2, '0')}-01`;
+        const ultimoDia = new Date(year, month, 0).getDate();
+        const dateFinal = `${year}-${String(month).padStart(2, '0')}-${ultimoDia}`;
+
+        console.log(`Buscando dados para ${dateInicial} a ${dateFinal}...`);
+
+        const dadosDiariosDoMes = await this.filtrarDadosDiarios(dateInicial, dateFinal);
+
+        
+        // CORREÇÃO AQUI: adicione 'await' se a função for async
+        const resumoDoMes = await this.calcularResumoMensal(dadosDiariosDoMes.dadosDiarios);
+
+        // Agora 'resumoDoMes' é o objeto real, não a promessa.
+        if (resumoDoMes) {
+            // Esta linha agora funciona corretamente.
+            (resumoDoMes as any).mes = month; 
+            resumosMensais.push(resumoDoMes);
+        }
+    }
+
+    return resumosMensais;
+}
+
+/**
+ * Analisa uma lista de resumos mensais e calcula um resumo estatístico para o ano inteiro.
+ * @param resumosMensais - Array de objetos, onde cada objeto contém o resumo de um mês.
+ * @returns Um objeto com as estatísticas consolidadas do ano.
+ */
+async agregarParaResumoAnual(resumosMensais: any[]) {
+    if (!resumosMensais || resumosMensais.length === 0) {
+        return null;
+    }
+
+    const resumoInicial = {
+        tempMaxAbsoluta: Number.NEGATIVE_INFINITY,
+        tempMinAbsoluta: Number.POSITIVE_INFINITY,
+        precipitacaoTotal: 0,
+        radiacaoTotal: 0,
+        maiorRajadaObj: { valor: Number.NEGATIVE_INFINITY, direcao: null },
+        
+        // Acumuladores para as médias anuais
+        somaMediaTempMax: 0,
+        somaMediaTemp: 0,
+        somaMediaVento: 0,
+        
+        countMeses: 0,
+    };
+
+    const estatisticasAnuais = resumosMensais.reduce((acc, mes) => {
+        // Encontrar os valores MÁXIMOS e MÍNIMOS absolutos do ano
+        acc.tempMaxAbsoluta = Math.max(acc.tempMaxAbsoluta, mes.temperaturaMaximaMes);
+        acc.tempMinAbsoluta = Math.min(acc.tempMinAbsoluta, mes.temperaturaMinimaMes);
+
+        // Encontrar a maior rajada de vento do ano
+        if (mes.maiorRajadaVentoMes > acc.maiorRajadaObj.valor) {
+            acc.maiorRajadaObj.valor = mes.maiorRajadaVentoMes;
+            acc.maiorRajadaObj.direcao = mes.direcaoMaiorRajada;
+        }
+
+        // SOMAR os totais mensais para obter o total anual
+        acc.precipitacaoTotal += mes.precipitacaoTotalMes;
+        acc.radiacaoTotal += mes.radiacaoSolarTotalMes;
+
+        // SOMAR as médias mensais para calcular a média anual
+        acc.somaMediaTempMax += mes.mediaTemperaturasMaximas;
+        acc.somaMediaTemp += mes.temperaturaMediaMes;
+        acc.somaMediaVento += mes.ventoMediaMes;
+        
+        acc.countMeses++;
+        
+        return acc;
+    }, resumoInicial);
+
+    // Montar o objeto final com os cálculos de média anual
+    const numMeses = estatisticasAnuais.countMeses || 1;
+    return {
+        ano: new Date().getFullYear(), // Ou o ano que foi passado como parâmetro
+        temperaturaMaximaAno: estatisticasAnuais.tempMaxAbsoluta,
+        temperaturaMinimaAno: estatisticasAnuais.tempMinAbsoluta,
+        precipitacaoTotalAno: estatisticasAnuais.precipitacaoTotal,
+        radiacaoSolarTotalAno: estatisticasAnuais.radiacaoTotal,
+        maiorRajadaVentoAno: estatisticasAnuais.maiorRajadaObj.valor,
+        direcaoMaiorRajadaAno: estatisticasAnuais.maiorRajadaObj.direcao,
+        mediaAnualDasTempMaximas: estatisticasAnuais.somaMediaTempMax / numMeses,
+        temperaturaMediaAnual: estatisticasAnuais.somaMediaTemp / numMeses,
+        ventoMediaAnual: estatisticasAnuais.somaMediaVento / numMeses,
+        mesesComDados: estatisticasAnuais.countMeses,
+    };
+}
 
 }
 
