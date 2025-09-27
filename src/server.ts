@@ -1,5 +1,5 @@
 // Importa o framework Express e a nossa classe de serviço
-import express from 'express';
+import express, { request, response } from 'express';
 import { ApiINMET } from './servers/ApiINMET';
 
 // Cria uma instância do aplicativo Express
@@ -17,8 +17,12 @@ const dataAPI = new ApiINMET();
 // =================================================================
 
 // Rota principal para verificar se a API está online
-app.get('/', (request, response) => {
-  return response.json({ message: 'API de dados meteorológicos está funcionando!' });
+app.get('/horario/:dataInicial/:dataFinal', async (request, response) => {
+    const { dataInicial, dataFinal } = request.params;
+
+    const data = await dataAPI.dadosHorariosDoDia(dataInicial, dataFinal);
+
+  return response.status(200).json(data);
 });
 
 // Rota para buscar dados diários já processados para um período
@@ -44,6 +48,23 @@ app.get('/mensal/:dataInicial/:dataFinal', async (request, response) => {
         return response.status(404).json({ message: "Não foram encontrados dados para este período." });
     }
 });
+
+
+app.get('/anual/lista/:ano', async (request, response) => {
+    try {
+         const year = parseInt(request.params.ano);
+
+        if (isNaN(year) || year < 1900 || year > 2100) {
+             return response.status(400).json({ message: "Ano inválido." });
+        }
+        const resumosMensais = await dataAPI.buscarResumosMensaisDoAno(year);
+        return response.status(200).json(resumosMensais);
+
+    } catch (error) {
+        console.error("Erro ao processar a lista de dados anuais:", error);
+        return response.status(500).json({ message: "Ocorreu um erro interno no servidor." });
+    }
+})
 
 // Rota para buscar o resumo ANUAL de um ano específico
 app.get('/anual/:ano', async (request, response) => {

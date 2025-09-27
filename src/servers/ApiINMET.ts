@@ -34,10 +34,44 @@ export class ApiINMET {
             return []; // Retorna um array vazio em caso de erro
         }
     }
-    
+
     // =================================================================
     // FUNÇÃO PRINCIPAL PARA PROCESSAR DADOS DIÁRIOS (A VERSÃO CORRIGIDA E UNIFICADA)
     // =================================================================
+
+    async dadosHorariosDoDia(dateInicial: string, dateFinal: string){
+        function converterHoraUTCparaBRT(hrMedicao: string, data: string): string {
+            // hrMedicao vem no formato "HHmm", ex: "0000", "1300"
+            const hora = parseInt(hrMedicao.substring(0, 2), 10);
+            const minuto = parseInt(hrMedicao.substring(2, 4), 10);
+
+            // cria objeto Date em UTC
+            const dataUTC = new Date(`${data}T${hora.toString().padStart(2, '0')}:${minuto.toString().padStart(2, '0')}:00Z`);
+
+            // converte para horário de Brasília (UTC-3)
+            const dataBRT = new Date(dataUTC.getTime() - 3 * 60 * 60 * 1000);
+
+            // retorna no formato HH:mm
+            return dataBRT.toTimeString().substring(0, 5);
+        }
+
+
+        const dataHorario = await this.getHourlyData(dateInicial, dateFinal);
+        const filtrados = dataHorario.map((item: any) => ({
+            TEM_MIN: item.TEM_MIN,
+            TEM_MAX: item.TEM_MAX,
+            UMD_MAX: item.UMD_MAX,
+            UMD_MIN: item.UMD_MIN,
+            CHUVA: item.CHUVA,
+            RAD_GLO: item.RAD_GLO * 3600 / 1_000_000,
+            VEN_VEL: item.VEN_VEL,
+            VEN_RAJ: item.VEN_RAJ,
+            VEN_DIR: item.VEN_DIR,
+            HR_MEDICAO: converterHoraUTCparaBRT(item.HR_MEDICAO, item.DT_MEDICAO),
+        }));
+
+        return filtrados;
+    }
 
     async filtrarDadosDiarios(dateInicial: string, dateFinal: string) {
         // Busca os dados brutos
