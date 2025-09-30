@@ -10,9 +10,9 @@ export class ApiINMET {
         this.token = token;
     }
 
-    // =================================================================
+    // ==================================================
     // MÉTODOS PRIVADOS PARA BUSCAR DADOS BRUTOS DA API
-    // =================================================================
+    // ==================================================
 
     private async getHourlyData(dateInicial: string, dateFinal: string){
         try {
@@ -58,6 +58,7 @@ export class ApiINMET {
 
         const dataHorario = await this.getHourlyData(dateInicial, dateFinal);
         const filtrados = dataHorario.map((item: any) => ({
+            HR_MEDICAO: converterHoraUTCparaBRT(item.HR_MEDICAO, item.DT_MEDICAO),
             TEM_MIN: item.TEM_MIN,
             TEM_MAX: item.TEM_MAX,
             UMD_MAX: item.UMD_MAX,
@@ -67,7 +68,7 @@ export class ApiINMET {
             VEN_VEL: item.VEN_VEL,
             VEN_RAJ: item.VEN_RAJ,
             VEN_DIR: item.VEN_DIR,
-            HR_MEDICAO: converterHoraUTCparaBRT(item.HR_MEDICAO, item.DT_MEDICAO),
+            
         }));
 
         return filtrados;
