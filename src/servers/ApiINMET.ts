@@ -40,23 +40,24 @@ export class ApiINMET {
     // =================================================================
 
     async dadosHorariosDoDia(dateInicial: string, dateFinal: string){
-        function converterHoraUTCparaBRT(hrMedicao: string, data: string): string {
-            // hrMedicao vem no formato "HHmm", ex: "0000", "1300"
+       function converterHoraUTCparaBRT(hrMedicao: string, data: string): string {
             const hora = parseInt(hrMedicao.substring(0, 2), 10);
             const minuto = parseInt(hrMedicao.substring(2, 4), 10);
 
             // cria objeto Date em UTC
             const dataUTC = new Date(`${data}T${hora.toString().padStart(2, '0')}:${minuto.toString().padStart(2, '0')}:00Z`);
 
-            // converte para horário de Brasília (UTC-3)
-            const dataBRT = new Date(dataUTC.getTime() - 3 * 60 * 60 * 1000);
-
-            // retorna no formato HH:mm
-            return dataBRT.toTimeString().substring(0, 5);
+            // já retorna no fuso de Brasília
+            return dataUTC.toLocaleTimeString('pt-BR', {
+                timeZone: 'America/Sao_Paulo',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
         }
 
-
         const dataHorario = await this.getHourlyData(dateInicial, dateFinal);
+
         const filtrados = dataHorario.map((item: any) => ({
             HR_MEDICAO: converterHoraUTCparaBRT(item.HR_MEDICAO, item.DT_MEDICAO),
             TEM_MIN: item.TEM_MIN,
