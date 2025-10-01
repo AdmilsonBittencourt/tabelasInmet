@@ -225,10 +225,7 @@ export class ApiINMET {
             // CHAMADA CORRIGIDA: Passa o array diretamente
             const resumoDoMes = this.calcularResumoMensal(dadosDiariosDoMes);
 
-            if (resumoDoMes) {
-                (resumoDoMes as any).mes = month;
-                resumosMensais.push(resumoDoMes);
-            }
+            resumosMensais.push({ mes: month, ...resumoDoMes })
         }
         return resumosMensais;
     }
