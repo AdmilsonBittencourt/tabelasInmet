@@ -293,6 +293,31 @@ export class ApiINMET {
         }
         return resumosMensais;
     }
+
+    async buscarDadosDiariosDoMes(year: number, month: number) {
+        const monthStr = String(month).padStart(2, '0');
+        const dateInicial = `${year}-${monthStr}-01`;
+        const ultimoDia = new Date(year, month, 0).getDate();
+        const dateFinal = `${year}-${monthStr}-${ultimoDia}`;
+
+        console.log(`Buscando dados diários para ${dateInicial} a ${dateFinal}...`);
+
+        // Busca os dados diários processados do mês
+        const dadosDiariosDoMes = await this.filtrarDadosDiarios(dateInicial, dateFinal);
+
+        // Retorna os dados diários com informações adicionais do mês
+        return {
+            ano: year,
+            mes: month,
+            periodo: {
+                dataInicial: dateInicial,
+                dataFinal: dateFinal,
+                totalDias: ultimoDia
+            },
+            dadosDiarios: dadosDiariosDoMes,
+            totalRegistros: dadosDiariosDoMes.length
+        };
+    }
     
     agregarParaResumoAnual(resumosMensais: any[]) {
         // O seu código original para esta função estava correto, pode mantê-lo.

@@ -16,7 +16,7 @@ const dataAPI = new ApiINMET();
 // ROTAS PRINCIPAIS DA API
 // =================================================================
 
-// Rota principal para verificar se a API está online
+// Rota buscar dados horários do dia
 app.get('/horario/:dataInicial/:dataFinal', async (request, response) => {
     try {
         const { dataInicial, dataFinal } = request.params;
@@ -28,7 +28,7 @@ app.get('/horario/:dataInicial/:dataFinal', async (request, response) => {
     }
 });
 
-// Rota para buscar dados diários já processados para um período
+// Rota para buscar dados de um dia específico
 app.get('/diario/:dataInicial/:dataFinal', async (request, response) => {
     try {
         const { dataInicial, dataFinal } = request.params;
@@ -39,6 +39,35 @@ app.get('/diario/:dataInicial/:dataFinal', async (request, response) => {
         return response.status(500).json({ message: 'Erro interno' });
     }
 });
+
+// Rota para buscar dados diários completos de um mês específico
+app.get('/mensal/dados/:ano/:mes', async (request, response) => {
+    try {
+        const year = parseInt(request.params.ano);
+        const month = parseInt(request.params.mes);
+        
+        if (isNaN(year) || year < 1900 || year > 2100) {
+            return response.status(400).json({ message: 'Ano inválido.' });
+        }
+        
+        if (isNaN(month) || month < 1 || month > 12) {
+            return response.status(400).json({ message: 'Mês inválido. Deve ser entre 1 e 12.' });
+        }
+        
+        const dadosDiariosDoMes = await dataAPI.buscarDadosDiariosDoMes(year, month);
+        
+        if (dadosDiariosDoMes.totalRegistros === 0) {
+            return response.status(404).json({ 
+                message: `Não foram encontrados dados para ${month}/${year}.` 
+            });
+        }
+        
+        return response.status(200).json(dadosDiariosDoMes);
+    } catch (error) {
+        console.error('Erro ao processar dados diários do mês:', error);
+        return response.status(500).json({ message: 'Ocorreu um erro interno no servidor.' });
+    }
+})
 
 // Rota para buscar o resumo MENSAL de um período
 app.get('/mensal/:dataInicial/:dataFinal', async (request, response) => {
@@ -56,7 +85,7 @@ app.get('/mensal/:dataInicial/:dataFinal', async (request, response) => {
     }
 });
 
-
+// Rota para buscar dados mensais de um ano específico
 app.get('/anual/lista/:ano', async (request, response) => {
     try {
         const year = parseInt(request.params.ano);
@@ -70,6 +99,7 @@ app.get('/anual/lista/:ano', async (request, response) => {
         return response.status(500).json({ message: 'Ocorreu um erro interno no servidor.' });
     }
 })
+
 
 // Rota para buscar o resumo ANUAL de um ano específico
 app.get('/anual/:ano', async (request, response) => {
