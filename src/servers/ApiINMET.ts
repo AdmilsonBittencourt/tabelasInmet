@@ -109,7 +109,7 @@ export class ApiINMET {
                 .reduce((sum, dado) => {
                     if (dado.RAD_GLO == null) return sum;
                     return sum + parseFloat(dado.RAD_GLO);
-                }, 0) * 3600 / 1_000_000;
+                }, 0) / 1000;
     
             const maiorRajadaObj = hourlyDataForThisDay
                 .reduce((maiorAteAgora, dadoAtual) => {
