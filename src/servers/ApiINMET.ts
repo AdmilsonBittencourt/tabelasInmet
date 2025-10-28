@@ -1,5 +1,46 @@
 import api from "./api";
 
+type HourlyRecord = {
+    DT_MEDICAO: string;
+    HR_MEDICAO: string;
+    TEM_MIN?: string | number | null;
+    TEM_MAX?: string | number | null;
+    UMD_MAX?: string | number | null;
+    UMD_MIN?: string | number | null;
+    UMD_MED?: string | number | null;
+    CHUVA?: string | number | null;
+    RAD_GLO?: string | number | null;
+    VEN_VEL?: string | number | null;
+    VEN_RAJ?: string | number | null;
+    VEN_DIR?: string | null;
+};
+
+type DailyRecord = {
+    DT_MEDICAO: string;
+    TEMP_MAX?: string | number | null;
+    TEMP_MIN?: string | number | null;
+    TEMP_MED?: string | number | null;
+    UMID_MIN?: string | number | null;
+    UMID_MED?: string | number | null;
+    CHUVA?: string | number | null;
+    VEL_VENTO_MED?: string | number | null;
+};
+
+type DailyProcessed = {
+    DT_MEDICAO: string;
+    TEMP_MAX?: string | number | null;
+    TEMP_MIN?: string | number | null;
+    TEMP_MED?: string | number | null;
+    UMD_MIN?: string | number | null;
+    UMD_MED?: string | number | null;
+    CHUVA?: string | number | null;
+    VEN_VEL?: string | number | null;
+    maiorUmidade: number | null;
+    radiacaoSolar: number;
+    rajadaDeVento: number | null;
+    direcaoRajada: string | null;
+};
+
 export class ApiINMET {
 
     private readonly stationCode: string;
@@ -18,7 +59,7 @@ export class ApiINMET {
         try {
             const { data } = await api.get(`/token/estacao/${dateInicial}/${dateFinal}/${this.stationCode}/${this.token}`);
             // Garante que sempre retorna um array, mesmo se a API retornar outra coisa
-            return Array.isArray(data) ? data : [];
+            return Array.isArray(data) ? (data as HourlyRecord[]) : [];
         } catch ( error ) {
             console.error(`Erro ao buscar dados horários de ${dateInicial} a ${dateFinal}:`, error);
             return []; // Retorna um array vazio em caso de erro
@@ -28,7 +69,7 @@ export class ApiINMET {
     private async getForDailyData(dateInicial: string, dateFinal:string) {
         try {
             const { data } = await api.get(`/token/estacao/diaria/${dateInicial}/${dateFinal}/${this.stationCode}/${this.token}`);
-            return Array.isArray(data) ? data : [];
+            return Array.isArray(data) ? (data as DailyRecord[]) : [];
         } catch ( error ) {
             console.error(`Erro ao buscar dados diários de ${dateInicial} a ${dateFinal}:`, error);
             return []; // Retorna um array vazio em caso de erro
@@ -58,14 +99,14 @@ export class ApiINMET {
 
         const dataHorario = await this.getHourlyData(dateInicial, dateFinal);
 
-        const filtrados = dataHorario.map((item: any) => ({
+        const filtrados = dataHorario.map((item: HourlyRecord) => ({
             HR_MEDICAO: converterHoraUTCparaBRT(item.HR_MEDICAO, item.DT_MEDICAO),
             TEM_MIN: item.TEM_MIN,
             TEM_MAX: item.TEM_MAX,
             UMD_MAX: item.UMD_MAX,
             UMD_MIN: item.UMD_MIN,
             CHUVA: item.CHUVA,
-            RAD_GLO: item.RAD_GLO * 3600 / 1_000_000,
+            RAD_GLO: (Number(item.RAD_GLO ?? 0) / 1000),
             VEN_VEL: item.VEN_VEL,
             VEN_RAJ: item.VEN_RAJ,
             VEN_DIR: item.VEN_DIR,
@@ -85,15 +126,28 @@ export class ApiINMET {
             return [];
         }
 
-        const dadosProcessados = dataDiario.map((dailyRecord: any) => {
+        const dadosProcessados = dataDiario.map((dailyRecord: DailyRecord): DailyProcessed => {
             const currentDate = dailyRecord.DT_MEDICAO;
     
             const hourlyDataForThisDay = dataHorario.filter(
-                (hourlyRecord: any) => hourlyRecord.DT_MEDICAO === currentDate
+                (hourlyRecord: HourlyRecord) => hourlyRecord.DT_MEDICAO === currentDate
             );
     
             if (hourlyDataForThisDay.length === 0) {
-                return { ...dailyRecord, maiorUmidade: null, radiacaoSolar: null, rajadaDeVento: null, direcaoRajada: null };
+                return {
+                    DT_MEDICAO: dailyRecord.DT_MEDICAO,
+                    TEMP_MAX: dailyRecord.TEMP_MAX,
+                    TEMP_MIN: dailyRecord.TEMP_MIN,
+                    TEMP_MED: dailyRecord.TEMP_MED,
+                    UMD_MIN: dailyRecord.UMID_MIN,
+                    UMD_MED: dailyRecord.UMID_MED,
+                    CHUVA: dailyRecord.CHUVA,
+                    VEN_VEL: dailyRecord.VEL_VENTO_MED,
+                    maiorUmidade: null,
+                    radiacaoSolar: 0,
+                    rajadaDeVento: null,
+                    direcaoRajada: null
+                };
             }
     
             // --- CÁLCULOS DIÁRIOS A PARTIR DOS DADOS HORÁRIOS ---
@@ -101,23 +155,26 @@ export class ApiINMET {
                 .reduce((max, dado) => {
                     const umidadeStr = dado.UMD_MAX || dado.UMD_MED;
                     if (umidadeStr == null) return max;
-                    const umidadeAtual = parseFloat(umidadeStr);
+                    const umidadeAtual = parseFloat(String(umidadeStr));
                     return umidadeAtual > max ? umidadeAtual : max;
                 }, Number.NEGATIVE_INFINITY);
     
             const radiacaoSolar = hourlyDataForThisDay
                 .reduce((sum, dado) => {
                     if (dado.RAD_GLO == null) return sum;
-                    return sum + parseFloat(dado.RAD_GLO);
+                    return sum + parseFloat(String(dado.RAD_GLO));
                 }, 0) / 1000;
     
-            const maiorRajadaObj = hourlyDataForThisDay
-                .reduce((maiorAteAgora, dadoAtual) => {
-                    if (dadoAtual.VEN_RAJ == null) return maiorAteAgora;
-                    const rajadaAtual = parseFloat(dadoAtual.VEN_RAJ);
-                    const rajadaMaior = parseFloat(maiorAteAgora.VEN_RAJ);
-                    return rajadaAtual > rajadaMaior ? dadoAtual : maiorAteAgora;
-                }, { VEN_RAJ: "-9999", VEN_DIR: null });
+            const rajadaInfo = hourlyDataForThisDay.reduce(
+                (acc, dado) => {
+                    const valor = dado.VEN_RAJ == null ? Number.NEGATIVE_INFINITY : parseFloat(String(dado.VEN_RAJ));
+                    if (valor > acc.valor) {
+                        return { valor, direcao: dado.VEN_DIR ?? null };
+                    }
+                    return acc;
+                },
+                { valor: Number.NEGATIVE_INFINITY, direcao: null as string | null }
+            );
     
             return {
                 DT_MEDICAO: dailyRecord.DT_MEDICAO,
@@ -130,8 +187,8 @@ export class ApiINMET {
                 VEN_VEL: dailyRecord.VEL_VENTO_MED,
                 maiorUmidade: maiorUmidade === Number.NEGATIVE_INFINITY ? null : maiorUmidade,
                 radiacaoSolar: radiacaoSolar,
-                rajadaDeVento: maiorRajadaObj.VEN_RAJ === "-9999" ? null : parseFloat(maiorRajadaObj.VEN_RAJ),
-                direcaoRajada: maiorRajadaObj.VEN_DIR,
+                rajadaDeVento: rajadaInfo.valor === Number.NEGATIVE_INFINITY ? null : rajadaInfo.valor,
+                direcaoRajada: rajadaInfo.direcao,
             };
         });
     
@@ -142,10 +199,10 @@ export class ApiINMET {
     // FUNÇÕES DE AGREGAÇÃO MENSAL E ANUAL
     // =================================================================
 
-    calcularResumoMensal(dadosDiariosProcessados: any[]) {
+    calcularResumoMensal(dadosDiariosProcessados: DailyProcessed[]) {
         if (!dadosDiariosProcessados || dadosDiariosProcessados.length === 0) return null;
 
-        const safeParseFloat = (value: string | number | null) => {
+        const safeParseFloat = (value: string | number | null | undefined) => {
             if (value == null) return 0;
             const parsed = parseFloat(String(value));
             return isNaN(parsed) ? 0 : parsed;
@@ -191,6 +248,13 @@ export class ApiINMET {
             somaTempMax: 0, somaTempMed: 0, somaUmidadeMed: 0, somaPrecipitacao: 0,
             somaRadiacaoSolar: 0, somaVelVento: 0, countTempMax: 0, countTempMed: 0,
             countUmidadeMed: 0, countVelVento: 0,
+        } as {
+            tempMaxAbsoluta: number; tempMinAbsoluta: number;
+            umidadeMaxAbsoluta: number; umidadeMinAbsoluta: number;
+            maiorRajadaObj: { rajadaDeVento: number; direcaoRajada: string | null };
+            somaTempMax: number; somaTempMed: number; somaUmidadeMed: number; somaPrecipitacao: number;
+            somaRadiacaoSolar: number; somaVelVento: number; countTempMax: number; countTempMed: number;
+            countUmidadeMed: number; countVelVento: number;
         });
 
         return {
@@ -225,7 +289,7 @@ export class ApiINMET {
             // CHAMADA CORRIGIDA: Passa o array diretamente
             const resumoDoMes = this.calcularResumoMensal(dadosDiariosDoMes);
 
-            resumosMensais.push({ mes: month, ...resumoDoMes })
+            resumosMensais.push({ mes: month, ...(resumoDoMes ?? {}) })
         }
         return resumosMensais;
     }
