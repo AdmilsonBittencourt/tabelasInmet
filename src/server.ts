@@ -1,6 +1,10 @@
 // Importa o framework Express e a nossa classe de serviço
+import 'reflect-metadata'; // Necessário para TypeORM decorators
 import express from 'express';
 import { ApiINMET } from './servers/ApiINMET';
+import { DatabaseService } from './services/DatabaseService';
+import { AppDataSource } from './database/data-source';
+import populateRoutes from './routes/populate';
 
 // Cria uma instância do aplicativo Express
 const app = express();
@@ -11,10 +15,14 @@ app.use(express.json());
 
 // Cria uma única instância da nossa classe de serviço para ser usada por todas as rotas
 const dataAPI = new ApiINMET();
+const dbService = new DatabaseService(dataAPI);
 
 // =================================================================
 // ROTAS PRINCIPAIS DA API
 // =================================================================
+
+// Rotas de população do banco
+app.use('/populate', populateRoutes);
 
 // Rota buscar dados horários do dia
 app.get('/horario/:dataInicial/:dataFinal', async (request, response) => {
@@ -121,7 +129,27 @@ app.get('/anual/:ano', async (request, response) => {
     }
 });
 
-// Inicia o servidor
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta http://localhost:${PORT}`);
+// Inicializa o banco de dados e inicia o servidor
+async function startServer() {
+    try {
+        // Inicializa a conexão com o banco de dados
+        await dbService.initialize();
+        
+        // Inicia o servidor
+        app.listen(PORT, () => {
+            console.log(`🚀 Servidor rodando na porta http://localhost:${PORT}`);
+        });
+    } catch (error) {
+        console.error('Erro ao inicializar o servidor:', error);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+// Tratamento de encerramento gracioso
+process.on('SIGINT', async () => {
+    console.log('\n🛑 Encerrando servidor...');
+    await dbService.close();
+    process.exit(0);
 });

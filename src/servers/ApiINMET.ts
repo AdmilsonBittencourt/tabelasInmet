@@ -100,16 +100,18 @@ export class ApiINMET {
         const dataHorario = await this.getHourlyData(dateInicial, dateFinal);
 
         const filtrados = dataHorario.map((item: HourlyRecord) => ({
+            DT_MEDICAO: item.DT_MEDICAO,
             HR_MEDICAO: converterHoraUTCparaBRT(item.HR_MEDICAO, item.DT_MEDICAO),
             TEM_MIN: item.TEM_MIN,
             TEM_MAX: item.TEM_MAX,
             UMD_MAX: item.UMD_MAX,
             UMD_MIN: item.UMD_MIN,
+            UMD_MED: item.UMD_MED,
             CHUVA: item.CHUVA,
             RAD_GLO: (Number(item.RAD_GLO ?? 0) / 1000),
             VEN_VEL: item.VEN_VEL,
             VEN_RAJ: item.VEN_RAJ,
-            VEN_DIR: item.VEN_DIR,
+            VEN_DIR: item.VEN_DIR ?? null,
             
         }));
 
